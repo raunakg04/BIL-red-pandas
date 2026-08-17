@@ -33,7 +33,18 @@ def _load_vector_store(index_dir: str, embedding_model: str) -> FAISS:
 
 
 def get_company_context(company_name: str, k: int = DEFAULT_TOP_K) -> str:
-    """Return top-k retrieved chunks as a single context string for a company."""
+    """Return top-k retrieved chunks as a single context string for a company.
+
+    Cached per (company_name, k): the same company can appear across many
+    failing loans in a portfolio, and without caching each one would re-embed
+    the same query and re-run FAISS search from scratch - wasted embedding
+    calls and latency for an answer that's identical every time.
+    """
+    return _get_company_context_cached(company_name, k)
+
+
+@lru_cache(maxsize=256)
+def _get_company_context_cached(company_name: str, k: int) -> str:
     index_dir = Path(os.getenv("RAG_INDEX_DIR", str(DEFAULT_INDEX_DIR)))
     embedding_model = os.getenv("RAG_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)
 

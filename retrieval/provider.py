@@ -68,8 +68,14 @@ def create_embeddings(default_model: str):
     return OpenAIEmbeddings(model=model)
 
 
-def create_chat_llm(default_model: str, temperature: float = 0):
-    """Create chat model client for either OpenAI or Azure OpenAI."""
+def create_chat_llm(default_model: str, temperature: float = 0, max_tokens: int | None = None):
+    """Create chat model client for either OpenAI or Azure OpenAI.
+
+    `max_tokens`, when given, bounds the completion length - useful for
+    tasks (like the suggestion-agent's explanation text) that are always a
+    short, fixed-shape answer, so an unbounded response can't quietly
+    inflate cost.
+    """
     if _is_azure_provider():
         endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "")
         api_key = _get_azure_api_key()
@@ -83,7 +89,8 @@ def create_chat_llm(default_model: str, temperature: float = 0):
             api_version=api_version,
             azure_deployment=deployment,
             temperature=temperature,
+            max_tokens=max_tokens,
         )
 
     model = os.getenv("RAG_LLM_MODEL", default_model)
-    return ChatOpenAI(model=model, temperature=temperature)
+    return ChatOpenAI(model=model, temperature=temperature, max_tokens=max_tokens)

@@ -38,39 +38,31 @@ def _build_explanation_prompt(
     current_asset: str,
     current_asset_value: float,
     threshold: float,
-    all_assets: List[AssetCandidate],
-    suggested_asset: Optional[AssetCandidate],
+    suggested_asset: AssetCandidate,
 ) -> str:
-    assets_json = json.dumps(
-        [
-            {"asset": asset.name, "asset_value": asset.value, "currency": asset.currency}
-            for asset in all_assets
-        ],
+    # Only the already-selected asset is referenced by the answer - the full
+    # parsed_assets list used to be dumped in here too, but the model never
+    # needed it (selection already happened deterministically in Python) and
+    # it was pure wasted input tokens, especially for companies with many
+    # parsed assets on record.
+    selected_json = json.dumps(
+        {
+            "asset": suggested_asset.name,
+            "asset_value": suggested_asset.value,
+            "currency": suggested_asset.currency,
+        },
         ensure_ascii=True,
-    )
-    selected_json = (
-        json.dumps(
-            {
-                "asset": suggested_asset.name,
-                "asset_value": suggested_asset.value,
-                "currency": suggested_asset.currency,
-            },
-            ensure_ascii=True,
-        )
-        if suggested_asset
-        else "null"
     )
     shortfall = max(threshold - current_asset_value, 0.0)
 
     return f"""
 You are a compliance reviewer assistant.
 
-Write a short, factual explanation for this deterministic collateral decision.
-Do not invent any numbers or assets. State: the loan value, the required
-collateral threshold (50% of the loan value), why the current asset falls
-short (its value and the shortfall amount), and - if one was found - the
-recommended alternative asset and its value, or that no alternative was
-found.
+Write a short, factual explanation (1-2 sentences, under 50 words) for this
+deterministic collateral decision. Do not invent any numbers or assets.
+State: the loan value, the required collateral threshold (50% of the loan
+value), why the current asset falls short (its value and the shortfall
+amount), and the recommended alternative asset and its value.
 
 - company_name: {company_name}
 - loan_value: {loan_value:.6f}
@@ -78,7 +70,6 @@ found.
 - current_asset_value: {current_asset_value:.6f}
 - required_threshold: {threshold:.6f}
 - shortfall: {shortfall:.6f}
-- parsed_assets: {assets_json}
 - selected_asset: {selected_json}
 
 Return STRICT JSON only:
@@ -308,16 +299,35 @@ def _generate_reason_with_llm(
     all_assets: List[AssetCandidate],
     suggested_asset: Optional[AssetCandidate],
 ) -> str:
-    """Use LLM only for human-readable explanation text."""
+    """Use LLM only for human-readable explanation text.
+
+    Only called when a qualifying alternative asset was actually found -
+    the no_match case has nothing for the model to add (there's no asset to
+    describe), so callers should skip this entirely and use
+    _default_reason() directly for that branch instead of paying for an LLM
+    call with no informational upside.
+    """
+    if suggested_asset is None:
+        return _default_reason(
+            company_name=company_name,
+            loan_value=loan_value,
+            current_asset=current_asset,
+            current_asset_value=current_asset_value,
+            suggested_asset=suggested_asset,
+            threshold=threshold,
+            all_assets=all_assets,
+        )
+
     try:
-        llm = create_chat_llm(default_model=DEFAULT_LLM_MODEL, temperature=0)
+        # max_tokens keeps the completion (and its cost) bounded - the task
+        # is always a single short sentence, never open-ended generation.
+        llm = create_chat_llm(default_model=DEFAULT_LLM_MODEL, temperature=0, max_tokens=120)
         prompt = _build_explanation_prompt(
             company_name=company_name,
             loan_value=loan_value,
             current_asset=current_asset,
             current_asset_value=current_asset_value,
             threshold=threshold,
-            all_assets=all_assets,
             suggested_asset=suggested_asset,
         )
         response = llm.invoke(prompt)
