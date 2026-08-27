@@ -102,15 +102,16 @@ See [Troubleshooting](#troubleshooting) if any of this doesn't work first try.
     **"💱 Fix: use `<expected>` instead of `<actual>`"** hint instead — a
     currency fix is a deterministic lookup, not something an asset-suggestion
     agent can help with.
+
+![Homepage](docs/homepage.png)
+
 - **Compliance & Portfolio Report** — portfolio-wide metric cards, a
   failures-by-rule bar chart, and a remediation-progress donut chart.
+![Analytics page](docs/analytics.png)
+
 - **OPA Rego Playground** — an illustrative, in-app check against the policy
   text. It does **not** call a real OPA engine — clearly labelled as such.
-- **Asset Value Predictor (ML)** — a heuristic estimator over the loaded
-  data, **not** a trained ML model — also clearly labelled.
-- **Reset 100k** (top-right) — regenerates a fresh random demo portfolio.
-- **Import CSV / Export Audit CSV** (top-right) — swap in your own data, or
-  save the current portfolio (with any review decisions) to a file.
+![OPA playground](docs/OPA_playground.png)
 
 ## Connecting your own data
 
